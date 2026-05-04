@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: browser-automation-agent
-Version: 0.1.0
-Summary: Command-line browser automation agent backed by Azure Playwright Service MCP and browser-use CLI.
-Requires-Python: >=3.11
-Requires-Dist: bu-agent-sdk>=0.0.1
-Requires-Dist: mcp>=1.0.0

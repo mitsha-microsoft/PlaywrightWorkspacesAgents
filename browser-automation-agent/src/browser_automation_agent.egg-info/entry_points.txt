@@ -1,2 +1,0 @@
-[console_scripts]
-browser-automation-agent = browser_automation_agent.main:run

@@ -1,0 +1,8 @@
+agent-framework>=1.2.2
+agent-framework-foundry>=1.2.2
+agent-framework-foundry-hosting>=1.0.0a260429
+azure-identity>=1.19.0
+browser-use>=0.12.6
+mcp>=1.0.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0

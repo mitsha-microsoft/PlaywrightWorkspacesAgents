@@ -1,6 +1,6 @@
 # Playwright Sample MCP Workspace
 
-This workspace currently contains two related projects for remote browser automation with Microsoft Playwright Workspaces.
+This workspace contains related projects for remote browser automation with Microsoft Playwright Workspaces.
 
 ## Projects
 
@@ -8,6 +8,7 @@ This workspace currently contains two related projects for remote browser automa
 | --- | --- | --- |
 | [`azure-playwright-service-mcp`](.\azure-playwright-service-mcp) | MCP server that creates and ends remote Chromium browser sessions through Azure Playwright Service. | Node.js |
 | [`browser-automation-agent`](.\browser-automation-agent) | Long-running command-line agent that uses the MCP server plus Browser Use CLI to automate the remote browser turn by turn. | Python |
+| [`browser-automation-agent-v2`](.\browser-automation-agent-v2) | Long-running command-line agent built with Microsoft Agent Framework, Agent Framework skills, the MCP server, and a generic shell tool for Browser Use CLI automation. | Python |
 
 ## `azure-playwright-service-mcp`
 
@@ -38,11 +39,25 @@ The agent supports Azure OpenAI through Entra auth with `DefaultAzureCredential`
 
 See [`browser-automation-agent\README.md`](.\browser-automation-agent\README.md) for setup and run instructions.
 
+## `browser-automation-agent-v2`
+
+This project is a command-line browser automation agent built with Microsoft Agent Framework.
+
+It:
+
+- Uses `FoundryChatClient` with `DefaultAzureCredential` for Azure AI Foundry model access.
+- Registers the local `azure-playwright-service-mcp` server through Agent Framework `MCPStdioTool`.
+- Provides a generic `run_shell` tool that the agent uses to run Browser Use CLI commands.
+- Loads an Agent Framework skill adapted from the Browser Use CLI skill for Azure Playwright Service remote browser sessions.
+- Logs skill/MCP session creation in blue and `run_shell`/session cleanup in yellow.
+
+See [`browser-automation-agent-v2\README.md`](.\browser-automation-agent-v2\README.md) for setup and run instructions.
+
 ## High-level flow
 
 ```text
 User
-  -> browser-automation-agent
+  -> browser-automation-agent or browser-automation-agent-v2
       -> azure-playwright-service-mcp
           -> Azure Playwright Service
       -> browser-use CLI

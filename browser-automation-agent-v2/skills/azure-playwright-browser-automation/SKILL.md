@@ -1,7 +1,7 @@
 ---
 name: azure-playwright-browser-automation
 description: Automates browser interactions for web testing, form filling, screenshots, and data extraction using Browser Use CLI connected to a remote Azure Playwright Service browser through MCP. Use when the user needs to navigate websites, interact with web pages, fill forms, take screenshots, test web applications, or extract information from web pages.
-allowed-tools: run_shell, create_browser_session, end_browser_session
+allowed-tools: run_shell, create_browser_session, close_browser_session
 ---
 
 # Browser Automation with browser-use CLI and Azure Playwright Service
@@ -12,28 +12,27 @@ This agent uses Azure Playwright Service for the browser itself. Do not launch a
 
 1. Call the `create_browser_session` MCP tool with a stable `sessionId`.
 2. Read the returned `cdpUrl`.
-3. Use `run_shell` to attach Browser Use to that CDP URL once:
+3. Use `run_shell` to connect Browser Use to that CDP URL once. This first command is only a connection handshake and must open `about:blank`:
 
    ```bash
    browser-use --session <sessionId> --cdp-url "<cdpUrl>" open about:blank
    ```
 
-4. For all later commands, reuse the same Browser Use session without `--cdp-url`:
+   Do not combine this command with navigation, `eval`, `state`, `&&`, `;`, pipes, or any other browser operation. Do not open the target website in the same command that passes `--cdp-url`.
+   Do not add shell-specific environment-variable setup such as `PYTHONIOENCODING=...` or `$env:PYTHONIOENCODING=...`; the `run_shell` tool already sets UTF-8 output handling.
+
+4. After the `about:blank` connection command succeeds, run the target browser work in separate commands that reuse the same Browser Use session without `--cdp-url`:
 
    ```bash
    browser-use --session <sessionId> state
    browser-use --session <sessionId> open https://example.com
    ```
 
-5. When the browser task is complete, run:
+5. When the browser task is complete, call the `close_browser_session` tool with the same `sessionId`.
 
-   ```bash
-   browser-use --session <sessionId> close
-   ```
+   Do not call `end_browser_session` directly. `close_browser_session` first runs `browser-use --session <sessionId> close` to disconnect Browser Use's held WSS/CDP connection, then calls MCP `end_browser_session`.
 
-6. Then call the `end_browser_session` MCP tool with the same `sessionId`.
-
-Keep the Browser Use daemon alive across turns. Do not repeatedly reconnect to the same Azure Playwright Service CDP URL; attach once, then reuse the Browser Use session.
+Keep the Browser Use daemon alive across turns. Do not repeatedly reconnect to the same Azure Playwright Service CDP URL; connect once to `about:blank`, then reuse the Browser Use session.
 
 ## Installation
 
@@ -57,15 +56,17 @@ For setup details, see https://github.com/browser-use/browser-use/blob/main/brow
 ## Core Workflow
 
 1. **Create remote browser**: call `create_browser_session` with a `sessionId`.
-2. **Attach Browser Use**: `browser-use --session <sessionId> --cdp-url "<cdpUrl>" open about:blank`.
-3. **Navigate**: `browser-use --session <sessionId> open <url>`.
+2. **Connect Browser Use**: `browser-use --session <sessionId> --cdp-url "<cdpUrl>" open about:blank`. This must be a standalone command with no `&&`, `;`, pipe, `eval`, `state`, target URL, or environment setup.
+3. **Navigate**: `browser-use --session <sessionId> open <url>`. Do not pass `--cdp-url` again.
 4. **Inspect**: `browser-use --session <sessionId> state` returns clickable elements with indices.
 5. **Interact**: use indices from state (`browser-use --session <sessionId> click 5`, `browser-use --session <sessionId> input 3 "text"`).
 6. **Verify**: `browser-use --session <sessionId> state` or `browser-use --session <sessionId> screenshot` to confirm.
 7. **Repeat**: browser stays open between commands.
-8. **Cleanup**: `browser-use --session <sessionId> close`, then `end_browser_session`.
+8. **Cleanup**: call `close_browser_session` with the same `sessionId`.
 
-If a command fails, run `browser-use --session <sessionId> state` and inspect the page before retrying. If the Browser Use daemon is broken, close it, call `end_browser_session`, then create a fresh remote session with a new `sessionId`.
+If the initial `--cdp-url ... open about:blank` connection command fails, do not retry the same CDP URL repeatedly. Call `close_browser_session`, then create a fresh remote session with a new `sessionId`.
+
+If a later command fails after the initial connection succeeded, run `browser-use --session <sessionId> state` and inspect the page before retrying. Only create a fresh remote session if the Browser Use daemon or remote browser is broken.
 
 Do not use `browser-use connect` or `browser-use cloud connect` for the default workflow. Azure Playwright Service MCP is the cloud-browser provider for this agent.
 
@@ -77,7 +78,7 @@ browser-use --headed open <url>                             # Local visible wind
 browser-use connect                                         # Local user's Chrome
 browser-use cloud connect                                   # Browser Use cloud
 browser-use --profile "Default" open <url>                  # Local Chrome profile
-browser-use --session <name> --cdp-url "<cdpUrl>" open <url> # Azure Playwright Service remote browser
+browser-use --session <name> --cdp-url "<cdpUrl>" open about:blank # Azure Playwright Service connection handshake
 ```
 
 For this agent, prefer the Azure Playwright Service remote browser mode.
@@ -133,7 +134,7 @@ browser-use --session <sessionId> cookies export <file>         # Export to JSON
 browser-use --session <sessionId> cookies import <file>         # Import from JSON
 
 # Session
-browser-use --session <sessionId> close                         # Close Browser Use daemon connection
+browser-use --session <sessionId> close                         # Low-level close; prefer close_browser_session tool
 browser-use sessions                                            # List active sessions
 browser-use close --all                                         # Close all local Browser Use sessions
 ```
@@ -190,20 +191,14 @@ Chain when you do not need intermediate output. Run separately when you need to 
 
 1. Pick a stable session id, for example `checkout-flow`.
 2. Call `create_browser_session` with `{ "sessionId": "checkout-flow" }`.
-3. Attach once:
+3. Connect once with a standalone command:
 
    ```bash
    browser-use --session checkout-flow --cdp-url "<cdpUrl>" open about:blank
    ```
 
-4. Use normal Browser Use commands with `--session checkout-flow`.
-5. Cleanup:
-
-   ```bash
-   browser-use --session checkout-flow close
-   ```
-
-6. Call `end_browser_session` with `{ "sessionId": "checkout-flow" }`.
+4. Use normal Browser Use commands with `--session checkout-flow` and without `--cdp-url`.
+5. Cleanup by calling `close_browser_session` with `{ "sessionId": "checkout-flow" }`.
 
 ### Authenticated Browsing
 
@@ -267,16 +262,10 @@ Config stored in `~/.browser-use/config.json`.
 
 ## Cleanup
 
-Always clean up both layers:
-
-```bash
-browser-use --session <sessionId> close
-```
-
-Then call:
+Always call:
 
 ```json
 { "sessionId": "<sessionId>" }
 ```
 
-with `end_browser_session`.
+with `close_browser_session`. It disconnects Browser Use's held WSS/CDP connection first, then ends the Playwright Service browser through MCP.

@@ -25,20 +25,22 @@ It uses:
 1. The agent loads the `azure-playwright-browser-automation` skill for browser automation tasks.
 2. It calls `create_browser_session` on the MCP server with a `sessionId`.
 3. The MCP server returns the Playwright Service `sessionUrl` as `cdpUrl`.
-4. The agent uses `run_shell` to attach Browser Use once:
+4. The agent uses `run_shell` to connect Browser Use once with a standalone `about:blank` command:
 
    ```powershell
    browser-use --session <sessionId> --cdp-url "<cdpUrl>" open about:blank
    ```
 
-5. Subsequent Browser Use commands reuse the same session:
+   This command must not be chained with navigation, `eval`, `state`, or shell environment setup.
+
+5. Subsequent Browser Use commands reuse the same session and do not pass `--cdp-url` again:
 
    ```powershell
    browser-use --session <sessionId> state
    browser-use --session <sessionId> open https://example.com
    ```
 
-6. When finished, the agent runs `browser-use --session <sessionId> close`, then calls MCP `end_browser_session`.
+6. When finished, the agent calls `close_browser_session`, which runs `browser-use --session <sessionId> close` to disconnect the held WSS/CDP connection, then calls MCP `end_browser_session`.
 
 ## Install
 
@@ -131,6 +133,6 @@ browser-agent-v2> Close the browser session.
 ## Logging
 
 - Blue: skill load and MCP `create_browser_session` calls.
-- Yellow: every `run_shell` call and MCP `end_browser_session` calls.
+- Yellow: every `run_shell` call and `close_browser_session` cleanup.
 
 Sensitive values such as bearer tokens, access keys, and CDP WebSocket URLs are redacted from shell command output where possible.

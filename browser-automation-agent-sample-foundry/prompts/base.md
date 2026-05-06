@@ -28,9 +28,8 @@ These rules apply to every profile:
    remote browser session.
 5. When browser work is done, call `close_browser_session` with the same
    `sessionId`. Do not call raw `end_browser_session`; it is intentionally not
-   exposed to you. `close_browser_session` detaches Playwright CLI, runs
-   Playwright CLI `kill-all` to clear local CLI state, and then asks the MCP
-   server to end the remote browser.
+   exposed to you. `close_browser_session` detaches Playwright CLI from the
+   named session and then asks the MCP server to end the remote browser.
 
 If the initial `open about:blank` command with `cdpUrl` fails, do not retry the
 same CDP URL repeatedly. Close the session and create a fresh browser with a new

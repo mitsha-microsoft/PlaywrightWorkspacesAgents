@@ -34,8 +34,7 @@ CLI command patterns.
    ```
 
 5. Call `close_browser_session` when finished. It detaches Playwright CLI from
-   the remote browser, runs Playwright CLI `kill-all` to clear local CLI state,
-   then ends the Playwright Service browser through MCP.
+   the named session, then ends the Playwright Service browser through MCP.
 
 If the initial `open about:blank` command with `cdpUrl` fails, do not retry the
 same CDP URL repeatedly. Call `close_browser_session`, then create a fresh remote
@@ -121,7 +120,6 @@ Always call `close_browser_session` with:
 { "sessionId": "<sessionId>" }
 ```
 
-This detaches Playwright CLI from the held WSS/CDP connection, runs
-`playwright-cli kill-all` to clear local CLI state, then ends the remote browser
-through the MCP server.
+This detaches Playwright CLI from the held WSS/CDP connection for the named
+session, then ends the remote browser through the MCP server.
 

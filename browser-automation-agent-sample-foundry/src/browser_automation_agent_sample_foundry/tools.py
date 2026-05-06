@@ -5,7 +5,6 @@ import json
 import os
 import shlex
 import shutil
-import subprocess
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -106,7 +105,7 @@ def make_run_playwright_cli(settings: AgentSettings):
             "PLAYWRIGHT_MCP_CDP_ENDPOINT to playwright-cli."
         ),
     )
-    def run_playwright_cli(
+    async def run_playwright_cli(
         sessionId: Annotated[str, Field(description="Browser session id previously passed to create_browser_session.")],
         command: Annotated[
             str,
@@ -136,27 +135,32 @@ def make_run_playwright_cli(settings: AgentSettings):
         safe_command = redact_sensitive_values(" ".join(process_args))
         log_yellow(f"[run_playwright_cli] timeout={effective_timeout}s command={safe_command}")
 
+        process = await asyncio.create_subprocess_exec(
+            *process_args,
+            cwd=str(project_root()),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
         try:
-            completed = subprocess.run(
-                process_args,
-                cwd=str(project_root()),
-                capture_output=True,
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                process.communicate(),
                 timeout=effective_timeout,
-                check=False,
-                env=env,
             )
-        except subprocess.TimeoutExpired as ex:
-            stdout = redact_sensitive_values(decode_subprocess_output(ex.stdout))
-            stderr = redact_sensitive_values(decode_subprocess_output(ex.stderr))
+        except asyncio.TimeoutError:
+            process.kill()
+            stdout_bytes, stderr_bytes = await process.communicate()
+            stdout = redact_sensitive_values(decode_subprocess_output(stdout_bytes))
+            stderr = redact_sensitive_values(decode_subprocess_output(stderr_bytes))
             return (
                 f"Command timed out after {effective_timeout} seconds.\n"
                 f"stdout:\n{stdout}\n\nstderr:\n{stderr}"
             )
 
-        stdout = redact_sensitive_values(decode_subprocess_output(completed.stdout))
-        stderr = redact_sensitive_values(decode_subprocess_output(completed.stderr))
+        stdout = redact_sensitive_values(decode_subprocess_output(stdout_bytes))
+        stderr = redact_sensitive_values(decode_subprocess_output(stderr_bytes))
         return (
-            f"exit_code: {completed.returncode}\n"
+            f"exit_code: {process.returncode}\n"
             f"stdout:\n{stdout or '<empty>'}\n\n"
             f"stderr:\n{stderr or '<empty>'}"
         )
@@ -201,7 +205,7 @@ def make_close_browser_session(settings: AgentSettings):
     @tool(
         name="close_browser_session",
         description=(
-            "Close a browser automation session. This first runs playwright-cli detach and kill-all "
+            "Close a browser automation session. This first runs playwright-cli detach "
             "to release local Playwright CLI state, then calls the Playwright Service MCP end_browser_session tool."
         ),
     )
@@ -226,15 +230,6 @@ def make_close_browser_session(settings: AgentSettings):
             env,
         )
 
-        log_yellow("[playwright-cli] kill-all")
-        kill_all_result = await run_playwright_cli_cleanup_command(
-            playwright_cli,
-            None,
-            "kill-all",
-            settings.playwright_cli_timeout_seconds,
-            env,
-        )
-
         log_yellow(f"[MCP] end_browser_session arguments={{'sessionId': '{session_id}'}}")
         try:
             mcp_result = await call_mcp_end_browser_session(settings, session_id)
@@ -243,16 +238,16 @@ def make_close_browser_session(settings: AgentSettings):
             mcp_result = {}
             mcp_end_error = redact_sensitive_values(str(ex))
 
-        return json.dumps(
+        result = json.dumps(
             {
                 "sessionId": session_id,
                 "playwrightCliDetach": detach_result,
-                "playwrightCliKillAll": kill_all_result,
                 "mcpEndResult": mcp_result,
                 "mcpEndError": mcp_end_error,
             },
             indent=2,
         )
+        return redact_sensitive_values(result)
 
     return close_browser_session
 

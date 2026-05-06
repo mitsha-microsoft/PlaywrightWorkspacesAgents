@@ -17,7 +17,7 @@ user asks for browser work, the agent:
 2. Calls `create_browser_session` to provision a remote Chromium browser.
 3. Connects Playwright CLI to the returned CDP WebSocket URL.
 4. Uses `run_playwright_cli` to invoke Playwright CLI commands.
-5. Calls `close_browser_session` to detach/kill Playwright CLI state and end the
+5. Calls `close_browser_session` to detach Playwright CLI state and end the
    remote browser.
 
 ```text
@@ -42,8 +42,8 @@ User
   browser connection and cleanup workflow.
 - **Playwright CLI installed in the image**: the Docker build installs
   `@playwright/cli` and runs `playwright-cli install --skills`.
-- **Safe cleanup path**: `close_browser_session` detaches Playwright CLI, runs
-  `playwright-cli kill-all`, and then ends the Playwright Service session.
+- **Safe cleanup path**: `close_browser_session` detaches the named Playwright
+  CLI session and then ends the Playwright Service session.
 - **Colored tool logs**: MCP and skill events log in blue; Playwright CLI and
   cleanup events log in yellow.
 
@@ -91,6 +91,10 @@ azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT "<registry>.azurecr.io"
 ```
 
 Do not commit `.env`, `.azure`, or files containing access tokens.
+
+Playwright Service access tokens are read when the hosted container starts. Use
+a token lifetime that matches the expected hosted-agent lifetime, or redeploy /
+restart the agent when rotating an expiring token.
 
 ## Choose a profile
 
@@ -184,6 +188,11 @@ Some preview versions of the Foundry azd extension may leave custom
 `{{VARIABLE}}` placeholders literal in `agent.yaml`. If that happens, substitute
 custom environment values only during deployment and restore `agent.yaml`
 afterward. Never commit a resolved file containing access tokens.
+
+This sample currently targets preview Agent Framework / Foundry hosting
+packages. The small compatibility shim in `src/.../compat.py` bridges known
+preview export differences and can be removed once the packages expose those
+symbols consistently.
 
 ## Customize the sample
 

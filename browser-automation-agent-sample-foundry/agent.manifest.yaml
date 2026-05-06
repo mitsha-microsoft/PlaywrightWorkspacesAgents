@@ -23,11 +23,13 @@ template:
     - name: AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN
       value: "{{AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN}}"
     - name: BROWSER_AGENT_PROFILE
-      value: general
+      value: "{{BROWSER_AGENT_PROFILE}}"
+    - name: BROWSER_AGENT_PROMPT_FILE
+      value: "{{BROWSER_AGENT_PROMPT_FILE}}"
     - name: BROWSER_AGENT_PLAYWRIGHT_CLI_TIMEOUT_SECONDS
-      value: "180"
+      value: "{{BROWSER_AGENT_PLAYWRIGHT_CLI_TIMEOUT_SECONDS}}"
     - name: BROWSER_AGENT_MCP_TIMEOUT_SECONDS
-      value: "120"
+      value: "{{BROWSER_AGENT_MCP_TIMEOUT_SECONDS}}"
 resources:
   - kind: model
     id: gpt-4o-mini

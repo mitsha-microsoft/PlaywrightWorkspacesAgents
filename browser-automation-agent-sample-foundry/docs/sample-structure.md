@@ -20,7 +20,6 @@ specialized without duplicating runtime code.
 | Profiles | `prompts/profiles/*.md` | Task-specific behavior for general automation, scraping, form filling, and QA testing. |
 | Skill | `skills/azure-playwright-browser-automation/SKILL.md` | Operational Playwright CLI reference for Azure Playwright Service sessions. |
 | Toolbox MCP | Foundry Toolbox | Governed remote MCP endpoint that provides `create_session`. |
-| Local fallback MCP | `azure-playwright-service-mcp/` | Optional Node.js MCP helper retained for local fallback cleanup scenarios. |
 | Deployment | `agent.yaml`, `agent.manifest.yaml`, `azure.yaml`, `Dockerfile` | Foundry hosted-agent and container configuration. |
 
 The Docker image installs `@playwright/cli` and runs

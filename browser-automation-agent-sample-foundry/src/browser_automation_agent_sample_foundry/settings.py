@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from pathlib import Path
-
-from .paths import default_mcp_server_path
 
 DEFAULT_AZURE_SCOPE = "https://ai.azure.com/.default"
 
@@ -15,9 +12,6 @@ class AgentSettings:
     model: str
     azure_scope: str
     toolbox_name: str
-    service_url: str | None
-    access_token: str | None
-    mcp_server_path: Path
     mcp_timeout_seconds: int
     playwright_cli_timeout_seconds: int
     profile: str
@@ -84,9 +78,6 @@ def make_settings() -> AgentSettings:
         model=require_env("AZURE_AI_MODEL_DEPLOYMENT_NAME", "BROWSER_AGENT_MODEL", "AZURE_OPENAI_DEPLOYMENT_NAME"),
         azure_scope=optional_env("AZURE_AI_SCOPE", "AZURE_OPENAI_SCOPE") or DEFAULT_AZURE_SCOPE,
         toolbox_name=require_env("BROWSER_AGENT_TOOLBOX_NAME", "TOOLBOX_NAME"),
-        service_url=optional_env("AZURE_PLAYWRIGHT_SERVICE_URL", "PLAYWRIGHT_SERVICE_URL"),
-        access_token=optional_env("AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN", "PLAYWRIGHT_SERVICE_ACCESS_TOKEN"),
-        mcp_server_path=Path(optional_env("BROWSER_AGENT_MCP_SERVER_PATH") or default_mcp_server_path()).resolve(),
         mcp_timeout_seconds=int_env("BROWSER_AGENT_MCP_TIMEOUT_SECONDS", 120),
         playwright_cli_timeout_seconds=int_env("BROWSER_AGENT_PLAYWRIGHT_CLI_TIMEOUT_SECONDS", 180),
         profile=optional_env("BROWSER_AGENT_PROFILE") or "general",

@@ -7,10 +7,6 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def default_mcp_server_path() -> Path:
-    return project_root() / "azure-playwright-service-mcp" / "src" / "index.js"
-
-
 def default_skill_path() -> Path:
     return project_root() / "skills"
 

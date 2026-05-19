@@ -6,7 +6,6 @@ import os
 import shlex
 import shutil
 import sys
-from datetime import timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -18,11 +17,9 @@ from .compat import ensure_agent_framework_compat
 
 ensure_agent_framework_compat()
 
-from agent_framework._mcp import MCPStdioTool, MCPStreamableHTTPTool
+from agent_framework._mcp import MCPStreamableHTTPTool
 from agent_framework._tools import tool
 from azure.identity import get_bearer_token_provider
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
 from pydantic import Field
 
 from .logging import log_yellow, redact_sensitive_values
@@ -205,45 +202,6 @@ def make_toolbox_mcp_tool(settings: AgentSettings, credential: Any) -> MCPStream
     )
 
 
-async def call_mcp_end_browser_session(settings: AgentSettings, session_id: str) -> dict[str, Any]:
-    if not settings.service_url or not settings.access_token:
-        raise RuntimeError(
-            "AZURE_PLAYWRIGHT_SERVICE_URL and AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN "
-            "are required to end a browser session through the local MCP server."
-        )
-
-    env = os.environ.copy()
-    env["AZURE_PLAYWRIGHT_SERVICE_URL"] = settings.service_url
-    env["AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN"] = settings.access_token
-
-    server = StdioServerParameters(
-        command="node",
-        args=[str(settings.mcp_server_path)],
-        env=env,
-        cwd=str(settings.mcp_server_path.parent),
-    )
-
-    async with stdio_client(server) as (read_stream, write_stream):
-        async with ClientSession(
-            read_stream,
-            write_stream,
-            read_timeout_seconds=timedelta(seconds=settings.mcp_timeout_seconds),
-        ) as session:
-            await session.initialize()
-            result = await session.call_tool("end_browser_session", {"sessionId": session_id})
-
-    text_parts = [getattr(item, "text", "") for item in result.content if getattr(item, "text", None)]
-    text = "\n".join(text_parts)
-    if result.isError:
-        raise RuntimeError(text or "MCP end_browser_session returned an error.")
-    if not text:
-        return {}
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return {"text": text}
-
-
 async def close_browser_by_cdp_url(cdp_url: str) -> dict[str, Any]:
     async with websockets.connect(cdp_url, open_timeout=10, close_timeout=10) as websocket:
         await websocket.send(json.dumps({"id": 1, "method": "Browser.close"}))
@@ -264,9 +222,7 @@ def make_close_browser_session(settings: AgentSettings):
         name="close_browser_session",
         description=(
             "Close a browser automation session. This first runs playwright-cli detach "
-            "to release local Playwright CLI state, then closes the remote browser by CDP URL when provided. "
-            "If cdpUrl is omitted, it falls back to the local Playwright Service MCP end_browser_session tool "
-            "when Playwright Service credentials are configured."
+            "to release local Playwright CLI state, then closes the remote browser by CDP URL."
         ),
     )
     async def close_browser_session(
@@ -275,13 +231,16 @@ def make_close_browser_session(settings: AgentSettings):
             Field(description="Local Playwright CLI session name used for this browser session."),
         ],
         cdpUrl: Annotated[
-            str | None,
+            str,
             Field(description="CDP WebSocket URL returned by create_session. Pass it so the tool can close the remote browser."),
-        ] = None,
+        ],
     ) -> str:
         session_id = sessionId.strip()
         if not session_id:
             raise ValueError("sessionId is required.")
+        cdp_url = cdpUrl.strip()
+        if not cdp_url:
+            raise ValueError("cdpUrl is required.")
 
         env = make_subprocess_env()
         playwright_cli = resolve_playwright_cli_command(env)
@@ -294,20 +253,13 @@ def make_close_browser_session(settings: AgentSettings):
             env,
         )
 
-        close_result: dict[str, Any] = {}
         close_error: str | None = None
-        if cdpUrl:
-            log_yellow(f"[CDP] Browser.close sessionId={session_id}")
-            try:
-                close_result = await close_browser_by_cdp_url(cdpUrl)
-            except Exception as ex:
-                close_error = redact_sensitive_values(str(ex))
-        else:
-            log_yellow(f"[MCP] end_browser_session arguments={{'sessionId': '{session_id}'}}")
-            try:
-                close_result = await call_mcp_end_browser_session(settings, session_id)
-            except Exception as ex:
-                close_error = redact_sensitive_values(str(ex))
+        log_yellow(f"[CDP] Browser.close sessionId={session_id}")
+        try:
+            close_result = await close_browser_by_cdp_url(cdp_url)
+        except Exception as ex:
+            close_result = {}
+            close_error = redact_sensitive_values(str(ex))
 
         result = json.dumps(
             {
@@ -321,27 +273,4 @@ def make_close_browser_session(settings: AgentSettings):
         return redact_sensitive_values(result)
 
     return close_browser_session
-
-
-def make_mcp_tool(settings: AgentSettings) -> MCPStdioTool:
-    if not settings.service_url or not settings.access_token:
-        raise RuntimeError(
-            "AZURE_PLAYWRIGHT_SERVICE_URL and AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN "
-            "are required to use the embedded Playwright Service MCP server."
-        )
-
-    env = os.environ.copy()
-    env["AZURE_PLAYWRIGHT_SERVICE_URL"] = settings.service_url
-    env["AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN"] = settings.access_token
-
-    return MCPStdioTool(
-        name="azure-playwright-service",
-        command="node",
-        args=[str(settings.mcp_server_path)],
-        env=env,
-        request_timeout=settings.mcp_timeout_seconds,
-        allowed_tools={"create_browser_session"},
-        load_prompts=False,
-        description="Creates Azure Playwright Service remote browser sessions.",
-    )
 

@@ -55,7 +55,6 @@ User
 | `prompts/base.md` | Shared lifecycle, safety, and cleanup rules. |
 | `prompts/profiles/` | User-editable profiles for specialization. |
 | `skills/azure-playwright-browser-automation/SKILL.md` | Playwright CLI operational reference for remote Azure Playwright Service sessions. |
-| `azure-playwright-service-mcp/` | Optional local MCP helper retained for local fallback cleanup scenarios. |
 | `docs/sample-structure.md` | Design notes explaining the sample structure and extension points. |
 
 ## Prerequisites
@@ -123,7 +122,6 @@ Install dependencies:
 uv sync --prerelease allow
 npm install -g @playwright/cli@latest
 playwright-cli install --skills
-npm --prefix azure-playwright-service-mcp install
 ```
 
 Run the hosted-agent server locally:

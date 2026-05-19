@@ -23,8 +23,7 @@ WORKDIR /app/user_agent
 RUN pip install --no-cache-dir uv \
     && uv sync --frozen --prerelease allow --no-dev \
     && npm install -g @playwright/cli@latest \
-    && playwright-cli install --skills \
-    && npm --prefix azure-playwright-service-mcp install --omit=dev
+    && playwright-cli install --skills
 
 EXPOSE 8088
 

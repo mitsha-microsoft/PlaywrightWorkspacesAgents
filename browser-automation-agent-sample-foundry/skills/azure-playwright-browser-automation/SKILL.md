@@ -1,7 +1,7 @@
 ---
 name: azure-playwright-browser-automation
-description: Automates browser interactions for web testing, form filling, screenshots, and data extraction using Playwright CLI connected to a remote Azure Playwright Service browser through MCP.
-allowed-tools: run_playwright_cli, create_browser_session, close_browser_session
+description: Automates browser interactions for web testing, form filling, screenshots, and data extraction using Playwright CLI connected to a remote Azure Playwright Service browser.
+allowed-tools: run_playwright_cli, create_session, close_browser_session
 ---
 
 # Browser automation with Playwright CLI and Azure Playwright Service
@@ -12,10 +12,10 @@ CLI command patterns.
 
 ## Remote browser connection
 
-1. Call `create_browser_session` with a stable `sessionId`.
+1. Call `create_session` with no arguments.
 2. Read the returned `cdpUrl`.
-3. Call `run_playwright_cli` with the same `sessionId`, the returned `cdpUrl`,
-   and the command:
+3. Choose a local Playwright CLI `sessionId`, then call `run_playwright_cli` with
+   that `sessionId`, the returned `cdpUrl`, and the command:
 
    ```text
    open about:blank
@@ -26,19 +26,21 @@ CLI command patterns.
 
    This must be a standalone handshake command. Do not combine it with target
    navigation, `eval`, `snapshot`, or any other browser operation.
-4. Run all subsequent commands with the same `sessionId` and no `cdpUrl`:
+4. Run all subsequent commands with the same local Playwright CLI `sessionId` and
+   no `cdpUrl`:
 
    ```text
    goto https://example.com
    snapshot
    ```
 
-5. Call `close_browser_session` when finished. It detaches Playwright CLI from
-   the named session, then ends the Playwright Service browser through MCP.
+5. Call `close_browser_session` with the same local Playwright CLI `sessionId`
+   and original `cdpUrl` when finished. It detaches Playwright CLI from the
+   named session, then closes the remote browser.
 
 If the initial `open about:blank` command with `cdpUrl` fails, do not retry the
-same CDP URL repeatedly. Call `close_browser_session`, then create a fresh remote
-session with a new `sessionId`.
+same CDP URL repeatedly. Call `close_browser_session`, then call
+`create_session` again to create a fresh remote browser.
 
 ## Installation check
 
@@ -117,9 +119,9 @@ Use `--raw` inside the command when you need only a result value:
 Always call `close_browser_session` with:
 
 ```json
-{ "sessionId": "<sessionId>" }
+{ "sessionId": "<sessionId>", "cdpUrl": "<cdpUrl>" }
 ```
 
 This detaches Playwright CLI from the held WSS/CDP connection for the named
-session, then ends the remote browser through the MCP server.
+session, then closes the remote browser over CDP.
 

@@ -21,7 +21,7 @@ def main() -> None:
     settings = make_settings()
     log_verbose(settings.verbose, f"Foundry project endpoint: {settings.project_endpoint}")
     log_verbose(settings.verbose, f"Model: {settings.model}")
-    log_verbose(settings.verbose, f"MCP server: {settings.mcp_server_path}")
+    log_verbose(settings.verbose, f"Toolbox: {settings.toolbox_name}")
     agent, _ = build_agent(settings)
     ResponsesHostServer(agent).run()
 

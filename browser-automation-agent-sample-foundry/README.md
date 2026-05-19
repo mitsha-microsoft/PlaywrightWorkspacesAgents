@@ -1,7 +1,7 @@
 # Browser Automation Agent Sample for Microsoft Foundry
 
 This sample shows how to build a Foundry-hosted browser automation agent with
-Microsoft Agent Framework, Azure Playwright Service, an embedded MCP server, and
+Microsoft Agent Framework, Foundry Toolbox, Azure Playwright Service, and
 Playwright CLI.
 
 The sample is designed to be easy to tailor. The runtime code is shared, while
@@ -13,8 +13,8 @@ the agent behavior is selected with small prompt profiles such as `general`,
 The agent runs as a Foundry hosted agent using the **Responses** protocol. When a
 user asks for browser work, the agent:
 
-1. Starts the embedded Azure Playwright Service MCP server over stdio.
-2. Calls `create_browser_session` to provision a remote Chromium browser.
+1. Connects to a Foundry Toolbox MCP endpoint in the same Foundry project.
+2. Calls `create_session` from that Toolbox to provision a remote Chromium browser.
 3. Connects Playwright CLI to the returned CDP WebSocket URL.
 4. Uses `run_playwright_cli` to invoke Playwright CLI commands.
 5. Calls `close_browser_session` to detach Playwright CLI state and end the
@@ -24,7 +24,7 @@ user asks for browser work, the agent:
 User
   -> Foundry hosted agent
       -> Agent Framework tools
-          -> embedded Azure Playwright Service MCP
+          -> Foundry Toolbox MCP create_session
               -> Azure Playwright Service remote Chromium
           -> Playwright CLI
               -> remote browser CDP session
@@ -35,7 +35,7 @@ User
 - **Foundry hosted agent**: containerized Agent Framework app exposed through
   `ResponsesHostServer` on port `8088`.
 - **Remote browser sessions**: Azure Playwright Service browser provisioning via
-  an embedded MCP server.
+  a governed Foundry Toolbox MCP endpoint.
 - **Profile-based specialization**: select `general`, `web-scraper`,
   `form-filler`, or `qa-tester` without changing Python code.
 - **Concrete browser skill**: a Playwright CLI skill documents the exact remote
@@ -43,8 +43,8 @@ User
 - **Playwright CLI installed in the image**: the Docker build installs
   `@playwright/cli` and runs `playwright-cli install --skills`.
 - **Safe cleanup path**: `close_browser_session` detaches the named Playwright
-  CLI session and then ends the Playwright Service session.
-- **Colored tool logs**: MCP and skill events log in blue; Playwright CLI and
+  CLI session and then closes the remote browser.
+- **Colored tool logs**: Toolbox and skill events log in blue; Playwright CLI and
   cleanup events log in yellow.
 
 ## Repository layout
@@ -55,7 +55,7 @@ User
 | `prompts/base.md` | Shared lifecycle, safety, and cleanup rules. |
 | `prompts/profiles/` | User-editable profiles for specialization. |
 | `skills/azure-playwright-browser-automation/SKILL.md` | Playwright CLI operational reference for remote Azure Playwright Service sessions. |
-| `azure-playwright-service-mcp/` | Embedded MCP server used by the hosted agent container. |
+| `azure-playwright-service-mcp/` | Optional local MCP helper retained for local fallback cleanup scenarios. |
 | `docs/sample-structure.md` | Design notes explaining the sample structure and extension points. |
 
 ## Prerequisites
@@ -63,7 +63,7 @@ User
 - A Microsoft Foundry project with a deployed model.
 - Azure Developer CLI with the Foundry AI extension.
 - Docker, if you want to build the container locally.
-- An Azure Playwright Service WebSocket endpoint and access token.
+- A Foundry Toolbox deployed in the same project with a `create_session` MCP tool.
 
 For hosted-agent setup, see
 [Deploy hosted agents with azd](https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/quickstart-hosted-agent?pivots=azd).
@@ -75,8 +75,7 @@ azd environment for deployment:
 
 ```powershell
 azd env set AZURE_AI_MODEL_DEPLOYMENT_NAME "gpt-4o-mini"
-azd env set AZURE_PLAYWRIGHT_SERVICE_URL "wss://<region>.api.playwright.microsoft.com/playwrightworkspaces/<workspace-id>/browsers"
-azd env set AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN "<token>"
+azd env set BROWSER_AGENT_TOOLBOX_NAME "<toolbox-name>"
 azd env set BROWSER_AGENT_PROFILE "web-scraper"
 # Optional: use a custom prompt file instead of prompts/profiles/<profile>.md.
 # azd env set BROWSER_AGENT_PROMPT_FILE "prompts/profiles/web-scraper.md"
@@ -92,9 +91,9 @@ azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT "<registry>.azurecr.io"
 
 Do not commit `.env`, `.azure`, or files containing access tokens.
 
-Playwright Service access tokens are read when the hosted container starts. Use
-a token lifetime that matches the expected hosted-agent lifetime, or redeploy /
-restart the agent when rotating an expiring token.
+The Toolbox endpoint is resolved as
+`<FOUNDRY_PROJECT_ENDPOINT>/toolboxes/<BROWSER_AGENT_TOOLBOX_NAME>/mcp?api-version=v1`
+and authenticated with the hosted agent identity.
 
 ## Choose a profile
 

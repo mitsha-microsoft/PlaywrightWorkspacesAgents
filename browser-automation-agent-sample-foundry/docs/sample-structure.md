@@ -5,7 +5,7 @@ specialized without duplicating runtime code.
 
 ## Design goals
 
-- Keep one shared implementation for Foundry hosting, tools, MCP wiring,
+- Keep one shared implementation for Foundry hosting, tools, Toolbox MCP wiring,
   Playwright CLI execution, logging, and cleanup.
 - Keep browser lifecycle invariants in one shared base prompt.
 - Let users tailor the agent by editing small profile prompt files.
@@ -19,7 +19,8 @@ specialized without duplicating runtime code.
 | Base prompt | `prompts/base.md` | Non-negotiable lifecycle, tool, safety, and cleanup rules. |
 | Profiles | `prompts/profiles/*.md` | Task-specific behavior for general automation, scraping, form filling, and QA testing. |
 | Skill | `skills/azure-playwright-browser-automation/SKILL.md` | Operational Playwright CLI reference for Azure Playwright Service sessions. |
-| MCP server | `azure-playwright-service-mcp/` | Embedded Node.js MCP server that provisions and ends remote browser sessions. |
+| Toolbox MCP | Foundry Toolbox | Governed remote MCP endpoint that provides `create_session`. |
+| Local fallback MCP | `azure-playwright-service-mcp/` | Optional Node.js MCP helper retained for local fallback cleanup scenarios. |
 | Deployment | `agent.yaml`, `agent.manifest.yaml`, `azure.yaml`, `Dockerfile` | Foundry hosted-agent and container configuration. |
 
 The Docker image installs `@playwright/cli` and runs
@@ -56,9 +57,9 @@ remain intact.
 ## Why profiles instead of separate agents?
 
 Separate projects for a web scraper agent and a form filler agent would duplicate
-the same Foundry hosting code, Playwright CLI wrapper, MCP setup, Dockerfile, and
-cleanup behavior. Profile files keep customization visible while avoiding runtime
-drift.
+the same Foundry hosting code, Playwright CLI wrapper, Toolbox setup, Dockerfile,
+and cleanup behavior. Profile files keep customization visible while avoiding
+runtime drift.
 
 ## Why not generic scraping/form-filling skills?
 

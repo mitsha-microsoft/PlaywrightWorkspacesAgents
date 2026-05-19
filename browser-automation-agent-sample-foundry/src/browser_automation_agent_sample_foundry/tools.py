@@ -10,12 +10,17 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
+import httpx
+import websockets
+from websockets.exceptions import ConnectionClosedOK
+
 from .compat import ensure_agent_framework_compat
 
 ensure_agent_framework_compat()
 
-from agent_framework._mcp import MCPStdioTool
+from agent_framework._mcp import MCPStdioTool, MCPStreamableHTTPTool
 from agent_framework._tools import tool
+from azure.identity import get_bearer_token_provider
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from pydantic import Field
@@ -101,19 +106,19 @@ def make_run_playwright_cli(settings: AgentSettings):
         name="run_playwright_cli",
         description=(
             "Run playwright-cli with a named session and return stdout, stderr, and exit code. "
-            "Set cdpUrl on the first command after create_browser_session so the tool can pass "
+            "Set cdpUrl on the first command after create_session so the tool can pass "
             "PLAYWRIGHT_MCP_CDP_ENDPOINT to playwright-cli."
         ),
     )
     async def run_playwright_cli(
-        sessionId: Annotated[str, Field(description="Browser session id previously passed to create_browser_session.")],
+        sessionId: Annotated[str, Field(description="Local Playwright CLI session name to use for this browser session.")],
         command: Annotated[
             str,
             Field(description='playwright-cli arguments, excluding the executable and session. Example: "goto https://example.com".'),
         ],
         cdpUrl: Annotated[
             str | None,
-            Field(description="CDP WebSocket URL returned by create_browser_session. Pass only for the first open/attach command."),
+            Field(description="CDP WebSocket URL returned by create_session. Pass only for the first open/attach command."),
         ] = None,
         timeout_seconds: Annotated[
             int | None,
@@ -168,7 +173,45 @@ def make_run_playwright_cli(settings: AgentSettings):
     return run_playwright_cli
 
 
+class ToolboxAuth(httpx.Auth):
+    def __init__(self, token_provider: Any):
+        self._get_token = token_provider
+
+    def auth_flow(self, request: httpx.Request):
+        request.headers["Authorization"] = f"Bearer {self._get_token()}"
+        yield request
+
+
+def resolve_toolbox_endpoint(settings: AgentSettings) -> str:
+    project_endpoint = settings.project_endpoint.rstrip("/")
+    return f"{project_endpoint}/toolboxes/{settings.toolbox_name}/mcp?api-version=v1"
+
+
+def make_toolbox_mcp_tool(settings: AgentSettings, credential: Any) -> MCPStreamableHTTPTool:
+    token_provider = get_bearer_token_provider(credential, settings.azure_scope)
+    http_client = httpx.AsyncClient(
+        auth=ToolboxAuth(token_provider),
+        headers={"Foundry-Features": "Toolboxes=V1Preview"},
+        timeout=settings.mcp_timeout_seconds,
+    )
+
+    return MCPStreamableHTTPTool(
+        name=settings.toolbox_name,
+        url=resolve_toolbox_endpoint(settings),
+        http_client=http_client,
+        request_timeout=settings.mcp_timeout_seconds,
+        load_prompts=False,
+        description="Creates Microsoft Playwright Workspaces remote browser sessions.",
+    )
+
+
 async def call_mcp_end_browser_session(settings: AgentSettings, session_id: str) -> dict[str, Any]:
+    if not settings.service_url or not settings.access_token:
+        raise RuntimeError(
+            "AZURE_PLAYWRIGHT_SERVICE_URL and AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN "
+            "are required to end a browser session through the local MCP server."
+        )
+
     env = os.environ.copy()
     env["AZURE_PLAYWRIGHT_SERVICE_URL"] = settings.service_url
     env["AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN"] = settings.access_token
@@ -201,19 +244,40 @@ async def call_mcp_end_browser_session(settings: AgentSettings, session_id: str)
         return {"text": text}
 
 
+async def close_browser_by_cdp_url(cdp_url: str) -> dict[str, Any]:
+    async with websockets.connect(cdp_url, open_timeout=10, close_timeout=10) as websocket:
+        await websocket.send(json.dumps({"id": 1, "method": "Browser.close"}))
+        while True:
+            try:
+                message = json.loads(await asyncio.wait_for(websocket.recv(), timeout=10))
+            except ConnectionClosedOK:
+                return {"closed": True}
+            if message.get("id") != 1:
+                continue
+            if "error" in message:
+                raise RuntimeError(f"Browser.close failed: {json.dumps(message['error'])}")
+            return {"closed": True}
+
+
 def make_close_browser_session(settings: AgentSettings):
     @tool(
         name="close_browser_session",
         description=(
             "Close a browser automation session. This first runs playwright-cli detach "
-            "to release local Playwright CLI state, then calls the Playwright Service MCP end_browser_session tool."
+            "to release local Playwright CLI state, then closes the remote browser by CDP URL when provided. "
+            "If cdpUrl is omitted, it falls back to the local Playwright Service MCP end_browser_session tool "
+            "when Playwright Service credentials are configured."
         ),
     )
     async def close_browser_session(
         sessionId: Annotated[
             str,
-            Field(description="The browser session id previously passed to create_browser_session."),
+            Field(description="Local Playwright CLI session name used for this browser session."),
         ],
+        cdpUrl: Annotated[
+            str | None,
+            Field(description="CDP WebSocket URL returned by create_session. Pass it so the tool can close the remote browser."),
+        ] = None,
     ) -> str:
         session_id = sessionId.strip()
         if not session_id:
@@ -230,20 +294,27 @@ def make_close_browser_session(settings: AgentSettings):
             env,
         )
 
-        log_yellow(f"[MCP] end_browser_session arguments={{'sessionId': '{session_id}'}}")
-        try:
-            mcp_result = await call_mcp_end_browser_session(settings, session_id)
-            mcp_end_error = None
-        except Exception as ex:
-            mcp_result = {}
-            mcp_end_error = redact_sensitive_values(str(ex))
+        close_result: dict[str, Any] = {}
+        close_error: str | None = None
+        if cdpUrl:
+            log_yellow(f"[CDP] Browser.close sessionId={session_id}")
+            try:
+                close_result = await close_browser_by_cdp_url(cdpUrl)
+            except Exception as ex:
+                close_error = redact_sensitive_values(str(ex))
+        else:
+            log_yellow(f"[MCP] end_browser_session arguments={{'sessionId': '{session_id}'}}")
+            try:
+                close_result = await call_mcp_end_browser_session(settings, session_id)
+            except Exception as ex:
+                close_error = redact_sensitive_values(str(ex))
 
         result = json.dumps(
             {
                 "sessionId": session_id,
                 "playwrightCliDetach": detach_result,
-                "mcpEndResult": mcp_result,
-                "mcpEndError": mcp_end_error,
+                "remoteCloseResult": close_result,
+                "remoteCloseError": close_error,
             },
             indent=2,
         )
@@ -253,6 +324,12 @@ def make_close_browser_session(settings: AgentSettings):
 
 
 def make_mcp_tool(settings: AgentSettings) -> MCPStdioTool:
+    if not settings.service_url or not settings.access_token:
+        raise RuntimeError(
+            "AZURE_PLAYWRIGHT_SERVICE_URL and AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN "
+            "are required to use the embedded Playwright Service MCP server."
+        )
+
     env = os.environ.copy()
     env["AZURE_PLAYWRIGHT_SERVICE_URL"] = settings.service_url
     env["AZURE_PLAYWRIGHT_SERVICE_ACCESS_TOKEN"] = settings.access_token

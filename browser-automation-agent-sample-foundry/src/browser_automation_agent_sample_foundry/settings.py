@@ -17,6 +17,7 @@ class AgentSettings:
     profile: str
     prompt_file: str | None
     verbose: bool
+    streaming_mode_enabled: bool
 
 
 @dataclass(frozen=True)
@@ -83,5 +84,6 @@ def make_settings() -> AgentSettings:
         profile=optional_env("BROWSER_AGENT_PROFILE") or "general",
         prompt_file=optional_env("BROWSER_AGENT_PROMPT_FILE"),
         verbose=bool_env("BROWSER_AGENT_VERBOSE"),
+        streaming_mode_enabled=bool_env("STREAMING_MODE_ENABLED"),
     )
 

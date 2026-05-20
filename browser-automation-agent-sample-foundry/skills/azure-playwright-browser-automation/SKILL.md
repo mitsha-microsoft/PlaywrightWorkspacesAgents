@@ -14,6 +14,8 @@ CLI command patterns.
 
 1. Call `create_session` with no arguments.
 2. Read the returned `cdpUrl`.
+   In streaming mode, the host streams the created browser session link to the
+   user immediately for live view while automation continues.
 3. Choose a local Playwright CLI `sessionId`, then call `run_playwright_cli` with
    that `sessionId`, the returned `cdpUrl`, and the command:
 

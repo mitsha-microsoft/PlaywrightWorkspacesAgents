@@ -88,6 +88,22 @@ If your environment requires an existing Azure Container Registry:
 azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT "<registry>.azurecr.io"
 ```
 
+This sample does not include an `infra/` template. If
+`AZURE_CONTAINER_REGISTRY_ENDPOINT` is not set, `azd deploy` cannot create an ACR
+for this project and falls back to local Docker. To use a new ACR, create one
+first and then set the endpoint:
+
+```powershell
+az acr create `
+  --resource-group "<resource-group>" `
+  --name "<globally-unique-registry-name>" `
+  --sku Standard `
+  --public-network-enabled true `
+  --admin-enabled false
+
+azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT "<globally-unique-registry-name>.azurecr.io"
+```
+
 Do not commit `.env`, `.azure`, or files containing access tokens.
 
 The Toolbox endpoint is resolved as
@@ -159,6 +175,13 @@ azd ai agent init `
   --model-deployment "gpt-4o-mini"
 ```
 
+Use the full Foundry **project** resource ID for `--project-id`; the account
+resource ID without `/projects/<project>` is not accepted. If you want a custom
+hosted-agent name, update the `name` fields in `agent.manifest.yaml`,
+`agent.yaml`, and the service key in `azure.yaml` before deploying; the service
+name in `azure.yaml` is the value passed to `azd deploy` and `azd ai agent
+invoke`.
+
 Deploy:
 
 ```powershell
@@ -185,6 +208,22 @@ Some preview versions of the Foundry azd extension may leave custom
 `{{VARIABLE}}` placeholders literal in `agent.yaml`. If that happens, substitute
 custom environment values only during deployment and restore `agent.yaml`
 afterward. Never commit a resolved file containing access tokens.
+
+After `azd ai agent init`, verify `agent.yaml` and `azure.yaml` before deploy:
+
+- `AZURE_AI_MODEL_DEPLOYMENT_NAME` should match the deployment you intend to use.
+- Toolbox, profile, and timeout placeholders should resolve to concrete values.
+- `azure.yaml` should reference the same existing model deployment. If the
+  manifest's default model was injected instead, update the generated files or
+  rerun init after aligning the manifest model resource.
+
+If invocation fails with an image pull error, confirm the ACR is reachable over
+its public endpoint and grant the Foundry project managed identity
+**Container Registry Repository Reader** on the registry. You can find the
+project identity on the Foundry project resource's **Identity** blade. For
+registries using legacy permissions, `AcrPull` might also be required. If an
+older shared ACR still fails, create a clean ACR in the Foundry project resource
+group, set `AZURE_CONTAINER_REGISTRY_ENDPOINT` to its login server, and redeploy.
 
 This sample currently targets preview Agent Framework / Foundry hosting
 packages. The small compatibility shim in `src/.../compat.py` bridges known

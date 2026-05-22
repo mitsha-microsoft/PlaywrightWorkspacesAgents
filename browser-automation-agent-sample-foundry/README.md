@@ -44,6 +44,9 @@ User
   `@playwright/cli` and runs `playwright-cli install --skills`.
 - **Safe cleanup path**: `close_browser_session` detaches the named Playwright
   CLI session and then closes the remote browser.
+- **Streaming-capable hosted endpoint**: standard `ResponsesHostServer` honors
+  streaming-capable Responses clients while preserving the normal MAF/Foundry
+  flow.
 - **Colored tool logs**: Toolbox and skill events log in blue; Playwright CLI and
   cleanup events log in yellow.
 
@@ -109,6 +112,24 @@ Do not commit `.env`, `.azure`, or files containing access tokens.
 The Toolbox endpoint is resolved as
 `<FOUNDRY_PROJECT_ENDPOINT>/toolboxes/<BROWSER_AGENT_TOOLBOX_NAME>/mcp?api-version=v1`
 and authenticated with the hosted agent identity.
+
+### Streaming responses and live view
+
+The sample uses the standard Microsoft Agent Framework `ResponsesHostServer`.
+Streaming behavior is controlled by the client request, for example by sending
+`"stream": true` from a Responses-capable SDK or raw SSE client.
+
+After `create_session` returns, the model is instructed to immediately emit:
+
+```text
+Created a new browser session [Live View URL](<link>)
+```
+
+and then continue the Playwright automation. If the Toolbox returns a
+`liveViewUrl`, the agent uses it directly. If no `liveViewUrl` is returned, the
+agent emits `No liveViewUrl was returned from the tool call. Automation will
+still continue` and proceeds with the returned `cdpUrl`. This keeps live-view
+behavior in the normal MAF/Foundry flow without deriving links from CDP URLs.
 
 ## Choose a profile
 

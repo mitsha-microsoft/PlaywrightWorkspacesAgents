@@ -44,9 +44,9 @@ User
   `@playwright/cli` and runs `playwright-cli install --skills`.
 - **Safe cleanup path**: `close_browser_session` detaches the named Playwright
   CLI session and then closes the remote browser.
-- **Optional streaming mode**: set `STREAMING_MODE_ENABLED=true` to force
-  Responses requests onto Agent Framework's streaming path, including tool-output
-  events for `create_session`.
+- **Streaming-capable hosted endpoint**: standard `ResponsesHostServer` honors
+  streaming-capable Responses clients while preserving the normal MAF/Foundry
+  flow.
 - **Colored tool logs**: Toolbox and skill events log in blue; Playwright CLI and
   cleanup events log in yellow.
 
@@ -83,8 +83,6 @@ azd env set BROWSER_AGENT_PROFILE "web-scraper"
 # azd env set BROWSER_AGENT_PROMPT_FILE "prompts/profiles/web-scraper.md"
 azd env set BROWSER_AGENT_PLAYWRIGHT_CLI_TIMEOUT_SECONDS "180"
 azd env set BROWSER_AGENT_MCP_TIMEOUT_SECONDS "120"
-azd env set STREAMING_MODE_ENABLED "false"
-azd env set BROWSER_AGENT_LIVE_VIEW_BASE_URL "https://pwwdashboard-f4gkeyekh5bucqb3.eastus-01.azurewebsites.net/"
 ```
 
 If your environment requires an existing Azure Container Registry:
@@ -115,32 +113,23 @@ The Toolbox endpoint is resolved as
 `<FOUNDRY_PROJECT_ENDPOINT>/toolboxes/<BROWSER_AGENT_TOOLBOX_NAME>/mcp?api-version=v1`
 and authenticated with the hosted agent identity.
 
-### Streaming mode
+### Streaming responses and live view
 
-By default, the hosted agent honors the client's `stream` value in the Responses
-request. Set `STREAMING_MODE_ENABLED=true` to force create-response requests onto
-Microsoft Agent Framework's streaming path even when the caller omits
-`"stream": true`:
+The sample uses the standard Microsoft Agent Framework `ResponsesHostServer`.
+Streaming behavior is controlled by the client request, for example by sending
+`"stream": true` from a Responses-capable SDK or raw SSE client.
 
-```powershell
-azd env set STREAMING_MODE_ENABLED "true"
+After `create_session` returns, the model is instructed to immediately emit:
+
+```text
+Created a new browser session [Live View URL](<link>)
 ```
 
-In streaming mode, clients receive Server-Sent Events instead of one buffered JSON
-response. Agent text is streamed as it becomes available, and the Toolbox
-`create_session` result is emitted as a `custom_tool_call_output` output item, so
-the returned `cdpUrl` can be consumed before the final assistant message. The
-streaming host also emits a normal assistant message in the form
-`Created a new browser session <link>` as soon as it sees the session URL, which
-matches the AgentServer reference sample's live-view behavior and lets clients
-show a browser view while the automation continues. If the Toolbox returns only a
-CDP URL, the host builds the live-view link with `BROWSER_AGENT_LIVE_VIEW_BASE_URL`.
-For a non-streaming JSON response, leave `STREAMING_MODE_ENABLED=false` and omit
-`"stream": true` from the request.
-
-Streaming mode uses in-memory Responses storage to avoid buffering streamed turns
-through the hosted Responses history store. Treat streaming invocations as
-stateless and send the full task context in each request.
+and then continue the Playwright automation. If the Toolbox returns a
+`liveViewUrl`, the agent uses it directly. If no `liveViewUrl` is returned, the
+agent emits `No liveViewUrl was returned from the tool call. Automation will
+still continue` and proceeds with the returned `cdpUrl`. This keeps live-view
+behavior in the normal MAF/Foundry flow without deriving links from CDP URLs.
 
 ## Choose a profile
 

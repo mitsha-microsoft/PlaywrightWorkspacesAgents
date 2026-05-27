@@ -10,6 +10,7 @@ This workspace contains related projects for remote browser automation with Micr
 | [`browser-automation-agent`](.\browser-automation-agent) | Long-running command-line agent that uses the MCP server plus Browser Use CLI to automate the remote browser turn by turn. | Python |
 | [`browser-automation-agent-v2`](.\browser-automation-agent-v2) | Long-running command-line agent built with Microsoft Agent Framework, Agent Framework skills, the MCP server, and a generic shell tool for Browser Use CLI automation. | Python |
 | [`browser-automation-agent-v2-foundry`](.\browser-automation-agent-v2-foundry) | Foundry-hosted container version of the v2 agent, exposing the Responses protocol through Microsoft Agent Framework hosting. | Python + Docker |
+| [`browser-automation-agent-sample-foundry`](.\browser-automation-agent-sample-foundry) | Publishable Foundry-hosted browser automation sample with shared runtime code, Playwright CLI tooling, and selectable prompt profiles for general browsing, scraping, form filling, and QA testing. | Python + Docker |
 
 ## `azure-playwright-service-mcp`
 
@@ -67,11 +68,24 @@ It:
 
 See [`browser-automation-agent-v2-foundry\README.md`](.\browser-automation-agent-v2-foundry\README.md) for local hosting and Foundry deployment instructions.
 
+## `browser-automation-agent-sample-foundry`
+
+This project is the sample-oriented version of the hosted browser automation agent.
+
+It:
+
+- Keeps Foundry hosting, MCP wiring, Playwright CLI execution, logging, and cleanup in one shared Python implementation.
+- Composes `prompts\base.md` with a selectable profile under `prompts\profiles\`.
+- Ships starter profiles for `general`, `web-scraper`, `form-filler`, and `qa-tester`.
+- Embeds the Azure Playwright Service MCP server inside the hosted container.
+
+See [`browser-automation-agent-sample-foundry\README.md`](.\browser-automation-agent-sample-foundry\README.md) for the sample quickstart, and [`browser-automation-agent-sample-foundry\docs\sample-structure.md`](.\browser-automation-agent-sample-foundry\docs\sample-structure.md) for the design rationale.
+
 ## High-level flow
 
 ```text
 User
-  -> browser-automation-agent, browser-automation-agent-v2, or browser-automation-agent-v2-foundry
+  -> browser-automation-agent, browser-automation-agent-v2, browser-automation-agent-v2-foundry, or browser-automation-agent-sample-foundry
       -> azure-playwright-service-mcp
           -> Azure Playwright Service
       -> browser-use CLI
